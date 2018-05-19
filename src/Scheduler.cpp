@@ -33,17 +33,24 @@
 
 #elif defined(ARDUINO_ARCH_AVR)
 extern int __heap_start, *__brkval;
-extern char* __malloc_heap_end;
+extern char *__malloc_heap_end;
 extern size_t __malloc_margin;
 
 #elif defined(ARDUINO_ARCH_SAM)
 #if !defined(RAMEND)
 #define RAMEND 0x20088000
 #endif
+
 #elif defined(ARDUINO_ARCH_SAMD)
 #if !defined(RAMEND)
 #define RAMEND 0x20008000
 #endif
+
+#elif defined(ARDUINO_ARCH_STM32F1)
+#if !defined(RAMEND)
+#define RAMEND 0x20005000
+#endif
+
 #endif
 
 // Stack magic pattern
@@ -54,103 +61,110 @@ SchedulerClass Scheduler;
 
 // Main task and run queue
 SchedulerClass::task_t SchedulerClass::s_main = {
-  &SchedulerClass::s_main,
-  &SchedulerClass::s_main,
-  { 0 },
-  NULL
-};
+	&SchedulerClass::s_main,
+	&SchedulerClass::s_main,
+	{0},
+	NULL};
 
 // Reference running task
-SchedulerClass::task_t* SchedulerClass::s_running = &SchedulerClass::s_main;
+SchedulerClass::task_t *SchedulerClass::s_running = &SchedulerClass::s_main;
 
 // Initial top stack for task allocation
 size_t SchedulerClass::s_top = SchedulerClass::DEFAULT_MAIN_STACK_SIZE;
 
 bool SchedulerClass::begin(size_t stackSize)
 {
-  // Set main task stack size
-  s_top = stackSize;
-  return (true);
+	// Set main task stack size
+	s_top = stackSize;
+	return (true);
 }
 
-bool SchedulerClass::start(func_t taskSetup, func_t taskLoop, size_t stackSize)
+bool SchedulerClass::start(func_t taskSetup, func_t taskLoop, int place, size_t stackSize)
 {
-  // Check called from main task and valid task loop function
-  if ((s_running != &s_main) || (taskLoop == NULL)) return (false);
+	// Check called from main task and valid task loop function
+	if ((s_running != &s_main) || (taskLoop == NULL))
+		return (false);
 
-  // Adjust stack size with size of task context
-  stackSize += sizeof(task_t);
+	// Adjust stack size with size of task context
+	stackSize += sizeof(task_t);
 
-  // Allocate stack(s) and check if main stack top should be set
-  size_t frame = RAMEND - (size_t) &frame;
-  uint8_t stack[s_top - frame];
-  if (s_main.stack == NULL) {
-    s_main.stack = stack;
-    memset(stack, MAGIC, s_top - frame);
-  }
+	// Allocate stack(s) and check if main stack top should be set
+	size_t frame = RAMEND - (size_t)&frame;
+	uint8_t stack[s_top - frame];
+	if (s_main.stack == NULL)
+	{
+		s_main.stack = stack;
+		memset(stack, MAGIC, s_top - frame);
+	}
 
 #if defined(ARDUINO_ARCH_AVR)
-  // Check that the task can be allocated
-  int HEAPEND = (__brkval == 0 ? (int) &__heap_start : (int) __brkval);
-  int STACKSTART = ((int) stack) - stackSize;
-  HEAPEND += __malloc_margin;
-  if (STACKSTART < HEAPEND) return (false);
+	// Check that the task can be allocated
+	int HEAPEND = (__brkval == 0 ? (int)&__heap_start : (int)__brkval);
+	int STACKSTART = ((int)stack) - stackSize;
+	HEAPEND += __malloc_margin;
+	if (STACKSTART < HEAPEND)
+		return (false);
 
-  // Adjust heap limit
-  __malloc_heap_end = (char*) STACKSTART;
+	// Adjust heap limit
+	__malloc_heap_end = (char *)STACKSTART;
 #else
-  // Check that the task can be allocated
-  if (s_top + stackSize > STACK_MAX) return (false);
+	// Check that the task can be allocated
+	if (s_top + stackSize > STACK_MAX)
+		return (false);
 #endif
 
-  // Adjust stack top for next task allocation
-  s_top += stackSize;
+	// Adjust stack top for next task allocation
+	s_top += stackSize;
 
-  // Fill stack with magic pattern to allow detect of stack usage
-  memset(stack - stackSize, MAGIC, stackSize - sizeof(task_t));
+	// Fill stack with magic pattern to allow detect of stack usage
+	memset(stack - stackSize, MAGIC, stackSize - sizeof(task_t));
 
-  // Initiate task with given functions and stack top
-  init(taskSetup, taskLoop, stack - stackSize);
-  return (true);
+	// Initiate task with given functions and stack top
+	init(taskSetup, taskLoop, place, stack - stackSize);
+	return (true);
 }
 
 void SchedulerClass::yield()
 {
-  // Caller will continue here on yield
-  if (setjmp(s_running->context)) return;
+	// Caller will continue here on yield
+	if (setjmp(s_running->context))
+		return;
 
-  // Next task in run queue will continue
-  s_running = s_running->next;
-  longjmp(s_running->context, true);
+	// Next task in run queue will continue
+	s_running = s_running->next;
+	longjmp(s_running->context, true);
 }
 
 size_t SchedulerClass::stack()
 {
-  const uint8_t* sp = s_running->stack;
-  size_t bytes = 0;
-  while (*sp++ == MAGIC) bytes++;
-  return (bytes);
+	const uint8_t *sp = s_running->stack;
+	size_t bytes = 0;
+	while (*sp++ == MAGIC)
+		bytes++;
+	return (bytes);
 }
 
-void SchedulerClass::init(func_t setup, func_t loop, const uint8_t* stack)
+void SchedulerClass::init(func_t setup, func_t loop, int place, const uint8_t *stack)
 {
-  // Add task last in run queue (main task)
-  task_t task;
-  task.next = &s_main;
-  task.prev = s_main.prev;
-  s_main.prev->next = &task;
-  s_main.prev = &task;
-  task.stack = stack;
+	// Add task last in run queue (main task)
+	task_t task;
+	task.next = &s_main;
+	task.prev = s_main.prev;
+	s_main.prev->next = &task;
+	s_main.prev = &task;
+	task.stack = stack;
 
-  // Create context for new task, caller will return
-  if (setjmp(task.context)) {
-    if (setup != NULL) setup();
-    while (1) loop();
-  }
+	// Create context for new task, caller will return
+	if (setjmp(task.context))
+	{
+		if (setup != NULL)
+			setup(place);
+		while (1)
+			loop(place);
+	}
 }
 
-extern "C"
-void yield(void)
+extern "C" void yield(void)
 {
-  Scheduler.yield();
+	Scheduler.yield();
 }
