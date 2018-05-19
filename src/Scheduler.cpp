@@ -55,7 +55,7 @@ extern size_t __malloc_margin;
 
 // Stack magic pattern
 const uint8_t MAGIC = 0xa5;
-
+static bool a = true;
 // Single-ton
 SchedulerClass Scheduler;
 
@@ -63,6 +63,9 @@ SchedulerClass Scheduler;
 SchedulerClass::task_t SchedulerClass::s_main = {
 	&SchedulerClass::s_main,
 	&SchedulerClass::s_main,
+	&a,
+	0xFFF,
+	{0},
 	{0},
 	NULL};
 
@@ -72,6 +75,11 @@ SchedulerClass::task_t *SchedulerClass::s_running = &SchedulerClass::s_main;
 // Initial top stack for task allocation
 size_t SchedulerClass::s_top = SchedulerClass::DEFAULT_MAIN_STACK_SIZE;
 
+bool *SchedulerClass::shouldDie(int id)
+{
+	return &a;
+}
+
 bool SchedulerClass::begin(size_t stackSize)
 {
 	// Set main task stack size
@@ -79,7 +87,8 @@ bool SchedulerClass::begin(size_t stackSize)
 	return (true);
 }
 
-bool SchedulerClass::start(func_t taskSetup, func_t taskLoop, int place, size_t stackSize)
+bool SchedulerClass::start(func_t taskSetup, func_t taskLoop, int id, bool *active,
+						   size_t stackSize)
 {
 	// Check called from main task and valid task loop function
 	if ((s_running != &s_main) || (taskLoop == NULL))
@@ -120,7 +129,7 @@ bool SchedulerClass::start(func_t taskSetup, func_t taskLoop, int place, size_t 
 	memset(stack - stackSize, MAGIC, stackSize - sizeof(task_t));
 
 	// Initiate task with given functions and stack top
-	init(taskSetup, taskLoop, place, stack - stackSize);
+	init(taskSetup, taskLoop, id, active, stack - stackSize);
 	return (true);
 }
 
@@ -132,7 +141,18 @@ void SchedulerClass::yield()
 
 	// Next task in run queue will continue
 	s_running = s_running->next;
-	longjmp(s_running->context, true);
+
+	// jmp to the active state, or reset the thread
+	if (!(*(s_running->active)) && (s_running != &s_main))
+	{
+		//Serial.println(s_running->id);
+		*s_running->active = true;
+		longjmp(s_running->reset, true);
+	}
+	else
+	{
+		longjmp(s_running->context, true);
+	}
 }
 
 size_t SchedulerClass::stack()
@@ -144,24 +164,39 @@ size_t SchedulerClass::stack()
 	return (bytes);
 }
 
-void SchedulerClass::init(func_t setup, func_t loop, int place, const uint8_t *stack)
+void SchedulerClass::init(func_t setup, func_t loop, int id, bool *active, const uint8_t *stack)
 {
 	// Add task last in run queue (main task)
 	task_t task;
 	task.next = &s_main;
 	task.prev = s_main.prev;
+	task.id = id;
+	task.active = active;
 	s_main.prev->next = &task;
 	s_main.prev = &task;
 	task.stack = stack;
 
-	// Create context for new task, caller will return
 	if (setjmp(task.context))
 	{
+resetLabel:
+		if (setjmp(task.reset))
+		{
+			if(setjmp(task.context)){
+				goto resetLabel;
+			}
+			yield();
+		}
+
 		if (setup != NULL)
-			setup(place);
+			setup(task.id);
 		while (1)
-			loop(place);
+			loop(task.id);
 	}
+}
+
+void SchedulerClass::st(func_t setup, func_t loop, task_t *task)
+{
+
 }
 
 extern "C" void yield(void)

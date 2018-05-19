@@ -52,7 +52,9 @@ class SchedulerClass
    * @param[in] stackSize in bytes.
    * @return bool.
    */
-	static bool start(func_t taskSetup, func_t taskLoop, int place, 
+	static bool start(func_t taskSetup,
+					  func_t taskLoop,
+					  int id, bool *active,
 					  size_t stackSize = DEFAULT_STACK_SIZE);
 
 	/**
@@ -63,12 +65,14 @@ class SchedulerClass
    * @param[in] stackSize in bytes.
    * @return bool.
    */
-	static bool startLoop(func_t taskLoop, int place = 0,
+	static bool startLoop(func_t taskLoop,
+						  int id, bool *active,
 						  size_t stackSize = DEFAULT_STACK_SIZE)
 	{
-		return (start(NULL, taskLoop, place, stackSize));
+		return (start(NULL, taskLoop, id, active, stackSize));
 	}
 
+	static bool* shouldDie(int id);
 	/**
    * Context switch to next task in run queue.
    */
@@ -91,8 +95,8 @@ class SchedulerClass
    * @param[in] loop task function (may not be NULL).
    * @param[in] stack top reference.
    */
-	static void init(func_t setup, func_t loop, int place, const uint8_t *stack);
-
+	static void init(func_t setup, func_t loop, int id, bool *active,
+					 const uint8_t *stack);
 	/**
    * Task run-time structure.
    */
@@ -100,9 +104,14 @@ class SchedulerClass
 	{
 		task_t *next;		  //!< Next task.
 		task_t *prev;		  //!< Previous task.
+		bool* active;		  //!< Task active
+		int id;				  //!< ID of tasks
+		jmp_buf reset;		  //!< Task context backup
 		jmp_buf context;	  //!< Task context.
 		const uint8_t *stack; //!< Task stack top.
 	};
+
+	static void st(func_t setup, func_t loop, task_t *task);
 
 #if defined(TEENSYDUINO)
 	/** Default stack size and stack max. */
