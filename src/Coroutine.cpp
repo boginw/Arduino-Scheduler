@@ -4,6 +4,7 @@ bool stdFalse = false;
 static unsigned long time = millis();
 
 static routine_t routines[MAX_ROUTINES];
+static int uuid = 1;
 
 void setupManager()
 {
@@ -28,28 +29,36 @@ int start(void (*func)(void*), void* param)
 			routines[i].empty = false;
 			routines[i].param = param;
 			routines[i].active = true;
-			return i;
+			routines[i].id = uuid++;
+			return routines[i].id;
 		}
 	}
 
 	return -1;
 }
 
-int kill(int id)
+bool kill(int id)
 {
-	routines[id].active = false;
-	routines[id].empty = true;
+	for(int i = 0; i < MAX_ROUTINES; i++)
+	{
+		if(routines[i].id == id && routines[i].active) {
+			routines[i].active = false;
+			routines[i].empty = true;
+			return true;
+		}
+	}
+	return false;
 }
 
-void handler(int id)
+void handler(int index)
 {
-	if (routines[id].empty)
+	if (routines[index].empty)
 	{
 		Scheduler.yield();
 		return;
 	}
-	routines[id].execute(routines[id].param);
-	routines[id].empty = true;
+	routines[index].execute(routines[index].param);
+	routines[index].empty = true;
 	Scheduler.yield();
 }
 

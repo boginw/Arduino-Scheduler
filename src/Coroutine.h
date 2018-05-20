@@ -5,14 +5,14 @@
 typedef struct routine
 {
 	void (*execute)(void*);
+	int id;
 	bool empty;
 	bool active;
 	void* param;
 } routine_t;
 
-bool* shouldDie(int id);
 void setupManager();
 int start(void (*func)(void*), void* param);
-int kill(int id);
-void handler(int id);
+bool kill(int id);
+void handler(int index);
 bool threadAvailable(int index);
