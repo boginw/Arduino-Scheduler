@@ -21,20 +21,21 @@
 
 #include <Scheduler.h>
 
-class Channel {
-public:
-  /**
+class Channel
+{
+  public:
+	/**
    * Initiate channel for message passing between tasks.
    */
- Channel() :
-   m_buf(NULL),
-   m_max(0),
-   m_size(0),
-   m_ticket(0),
-   m_serving(0)
-  {}
+	Channel() : m_buf(NULL),
+				m_max(0),
+				m_size(0),
+				m_ticket(0),
+				m_serving(0)
+	{
+	}
 
-  /**
+	/**
    * Send given message, buffer and size, to receiving task. Wait
    * until receiver task is ready before copying message to receiver
    * buffer. Multiple senders will queue in order. Returns message
@@ -43,57 +44,73 @@ public:
    * @param[in] size message size.
    * @return message size or negative error code.
    */
-  int send(const void* buf, size_t size)
-  {
-    // Take a ticket and wait for service
-    uint8_t ticket = m_ticket++;
-    await(ticket == m_serving && m_buf != NULL);
+	int send(const void *buf, size_t size)
+	{
+		// Take a ticket and wait for service
+		uint8_t ticket = m_ticket++;
+		await(ticket == m_serving && m_buf != NULL);
 
-    // Check that the receiver buffer can hold the message
-    if (size > m_max) {
-      m_serving += 1;
-      return (-1);
-    }
+		// Check that the receiver buffer can hold the message
+		if (size > m_max)
+		{
+			m_serving += 1;
+			return (-1);
+		}
 
-    // Copy message to receiver buffer
-    memcpy(m_buf, buf, size);
-    m_size = size;
-    return (size);
-  }
+		// Copy message to receiver buffer
+		memcpy(m_buf, buf, size);
+		m_size = size;
+		return (size);
+	}
 
-  /**
+	/**
    * Receive message from channel. Wait for sender task to copy
    * message into given receive buffer. Returns received message size.
    * @param[in] buf message buffer.
    * @param[in] size message size.
    * @return received message size.
    */
-  int recv(void* buf, size_t size)
-  {
-    // Wait for the channel to be free for receive
-    await(m_buf == NULL);
-    m_buf = buf;
-    m_max = size;
-    m_size = 0;
+	int recv(void *buf, size_t size)
+	{
+		// Wait for the channel to be free for receive
+		await(m_buf == NULL);
+		m_buf = buf;
+		m_max = size;
+		m_size = 0;
 
-    // Wait for message from sender
-    await(m_size != 0);
-    int res = m_size;
-    m_buf = NULL;
-    m_max = 0;
-    m_size = 0;
-    m_serving += 1;
+		// Wait for message from sender
+		await(m_size != 0);
+		int res = m_size;
+		m_buf = NULL;
+		m_max = 0;
+		m_size = 0;
+		m_serving += 1;
 
-    // Return size of received message
-    return (res);
-  }
+		// Return size of received message
+		return (res);
+	}
 
-protected:
-  void* m_buf;			//!< Message buffer
-  volatile size_t m_max;	//!< Max message size
-  volatile size_t m_size;	//!< Actual message size
-  volatile uint8_t m_ticket;	//!< Sender ticket
-  volatile uint8_t m_serving;	//!< Next sender ticket
+	template <typename T>
+	T recval()
+	{
+		T value;
+		this->recv(&value, sizeof(T));
+		//Serial.println(value);
+		return value;
+	}
+
+	/*template <typename T>
+	void sendval(T value)
+	{
+		this.send(&value, sizeof(T));
+	}*/
+
+  protected:
+	void *m_buf;				//!< Message buffer
+	volatile size_t m_max;		//!< Max message size
+	volatile size_t m_size;		//!< Actual message size
+	volatile uint8_t m_ticket;  //!< Sender ticket
+	volatile uint8_t m_serving; //!< Next sender ticket
 };
 
 #endif
