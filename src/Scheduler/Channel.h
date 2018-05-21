@@ -21,6 +21,7 @@
 
 #include <Scheduler.h>
 
+template <typename T>
 class Channel
 {
   public:
@@ -90,13 +91,18 @@ class Channel
 		return (res);
 	}
 
-	template <typename T>
 	T recval()
 	{
 		T value;
 		this->recv(&value, sizeof(T));
 		//Serial.println(value);
 		return value;
+	}
+
+	void sendval(T toSend)
+	{
+		T copy = toSend;
+		this->send(&copy, sizeof(T));
 	}
 
 	/*template <typename T>
