@@ -133,11 +133,12 @@ class SchedulerClass
 #elif defined(ARDUINO_ARCH_AVR)
 	/** Default stack size. Stack max dynamically checked against heap end. */
 	static const size_t DEFAULT_STACK_SIZE = 128;
-#if defined(USBCON)
-	static const size_t DEFAULT_MAIN_STACK_SIZE = 320;
-#else
 	static const size_t DEFAULT_MAIN_STACK_SIZE = 256;
-#endif
+
+#elif defined(__AVR_ATmega328P__)
+	/** Default stack size. Stack max dynamically checked against heap end. */
+	static const size_t DEFAULT_STACK_SIZE = 128;
+	static const size_t DEFAULT_MAIN_STACK_SIZE = 256;
 
 #elif defined(ARDUINO_ARCH_SAM)
 	/** Default stack size and stack max. */
@@ -146,12 +147,6 @@ class SchedulerClass
 	static const size_t STACK_MAX = 32768;
 
 #elif defined(ARDUINO_ARCH_SAMD)
-	/** Default stack size and stack max. */
-	static const size_t DEFAULT_STACK_SIZE = 1024;
-	static const size_t DEFAULT_MAIN_STACK_SIZE = 2048;
-	static const size_t STACK_MAX = 16384;
-
-#elif defined(ARDUINO_ARCH_STM32F1)
 	/** Default stack size and stack max. */
 	static const size_t DEFAULT_STACK_SIZE = 1024;
 	static const size_t DEFAULT_MAIN_STACK_SIZE = 2048;

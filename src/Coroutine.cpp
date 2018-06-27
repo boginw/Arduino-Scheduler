@@ -72,6 +72,6 @@ SIGNAL(TIMER0_COMPA_vect)
 	if (millis() - time >= 1)
 	{
 		time = millis();
-		yield();
+		Scheduler.yield();
 	}
 }
